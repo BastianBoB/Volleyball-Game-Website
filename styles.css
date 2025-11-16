@@ -1,0 +1,74 @@
+/* Grundlayout: zwei Spalten für Gruppe A / B */
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    margin: 16px;
+    color: #222;
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+/* Karten für Gruppen */
+.group-card {
+    background: #fafafa;
+    border: 1px solid #ddd;
+    padding: 12px;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+/* Tabellen im kompakten Stil */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 12px;
+}
+
+table td, table th {
+    border: 1px solid #e6e6e6;
+    padding: 6px 8px;
+    vertical-align: middle;
+}
+
+table tbody tr:nth-child(odd) {
+    background: #fff;
+}
+
+table tbody tr:nth-child(even) {
+    background: #f8f8f8;
+}
+
+/* Spielplan-Tabellen etwas größer */
+.schedule table td {
+    padding: 8px 10px;
+}
+
+/* Inputs und Buttons */
+input[type="text"] {
+    padding: 8px;
+    margin-bottom: 8px;
+    box-sizing: border-box;
+}
+
+input[type="number"] {
+    padding: 6px;
+}
+
+button#createBtn {
+    display: block;
+    margin: 12px auto;
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1px solid #888;
+    background: #f0f0f0;
+}
