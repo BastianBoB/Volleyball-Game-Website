@@ -149,8 +149,33 @@ function generateScheduleForGroup(groupKey) {
 
     const tbody = document.createElement('tbody');
 
-    for (let i = 0; i < teams.length; i++) {
-        for (let j = i + 1; j < teams.length; j++) {
+    let players = teams.slice();
+
+    if (players.length % 2 == 1) {
+        players.push(null);
+    }
+
+    const playerCount = players.length;
+    const rounds = playerCount - 1;
+    const half = playerCount / 2;
+
+    const playerIndexes = players.map((_, i) => i).slice(1);
+
+    for (let round = 0; round < rounds; round++) {
+        const roundPairings = [];
+
+        const newPlayerIndexes = [0].concat(playerIndexes);
+
+        const firstHalf = newPlayerIndexes.slice(0, half);
+        const secondHalf = newPlayerIndexes.slice(half, playerCount).reverse();
+
+        for (let k = 0; k < firstHalf.length; k++) {
+
+            let team1 = players[firstHalf[k]];
+            let team2 = players[secondHalf[k]];
+
+            if (team1 === null || team2 === null)  continue;
+
             const tr = document.createElement('tr');
 
             // Punkte Team A (Input)
@@ -159,15 +184,15 @@ function generateScheduleForGroup(groupKey) {
             inpA.type = 'number';
             inpA.min = '0';
             inpA.style.width = '60px';
-            inpA.dataset.team = teams[i];
-            inpA.dataset.teamOpp = teams[j];
+            inpA.dataset.team = team1;
+            inpA.dataset.teamOpp = team2;
             inpA.dataset.group = groupKey;
             tdAInp.appendChild(inpA);
             tr.appendChild(tdAInp);
 
             // Team A Name
             const tdAName = document.createElement('td');
-            tdAName.textContent = teams[i];
+            tdAName.textContent = team1;
             tr.appendChild(tdAName);
 
             // Separator
@@ -178,7 +203,7 @@ function generateScheduleForGroup(groupKey) {
 
             // Team B Name
             const tdBName = document.createElement('td');
-            tdBName.textContent = teams[j];
+            tdBName.textContent = team2;
             tr.appendChild(tdBName);
 
             // Punkte Team B (Input)
@@ -187,8 +212,8 @@ function generateScheduleForGroup(groupKey) {
             inpB.type = 'number';
             inpB.min = '0';
             inpB.style.width = '60px';
-            inpB.dataset.team = teams[j];
-            inpB.dataset.teamOpp = teams[i];
+            inpB.dataset.team = team2;
+            inpB.dataset.teamOpp = team1;
             inpB.dataset.group = groupKey;
             tdBInp.appendChild(inpB);
             tr.appendChild(tdBInp);
@@ -198,6 +223,9 @@ function generateScheduleForGroup(groupKey) {
 
             tbody.appendChild(tr);
         }
+
+        // rotating the array
+        playerIndexes.push(playerIndexes.shift());
     }
 
     table.appendChild(tbody);
