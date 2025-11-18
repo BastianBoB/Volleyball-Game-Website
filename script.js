@@ -1,3 +1,7 @@
+// Vollständiges script.js mit localStorage (Teams + Ergebnisse), Platzierung und ausgeglichener Spielreihenfolge
+
+const STORAGE_KEY = 'volleyball_state_v1';
+
 let finalized = false;
 
 // Gruppen-Daten (Teams als Objekte mit Statistiken)
@@ -6,7 +10,81 @@ const groups = {
     B: []
 };
 
-// Enter-Handler zum Hinzufügen von Teams
+// Alle Ergebnisse: key = "TeamLeft|TeamRight" (so wie in der Tabelle), value = { group: 'A'|'B', team1, team2, score1, score2 }
+let allResults = {};
+
+// --- Helpers ---
+function saveState() {
+    try {
+        const state = {
+            finalized,
+            groups: {
+                A: groups.A.map(t => t.name),
+                B: groups.B.map(t => t.name)
+            },
+            allResults
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (err) {
+        console.warn('saveState failed', err);
+    }
+}
+
+function loadState() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    try {
+        const state = JSON.parse(raw);
+        finalized = !!state.finalized;
+        groups.A = (state.groups?.A || []).map(n => ({ name: n, points: 0, diff: 0 }));
+        groups.B = (state.groups?.B || []).map(n => ({ name: n, points: 0, diff: 0 }));
+        allResults = state.allResults || {};
+        updateTable('A');
+        updateTable('B');
+
+        if (finalized) {
+            // Erzeuge Spielpläne und fülle gespeicherte Werte ein
+            document.getElementById('scheduleA').innerHTML = '';
+            document.getElementById('scheduleB').innerHTML = '';
+            document.getElementById('scheduleA').appendChild(generateScheduleForGroup('A'));
+            document.getElementById('scheduleB').appendChild(generateScheduleForGroup('B'));
+
+            // Fülle Inputs aus allResults (prüft beide Orientierungen)
+            ['A','B'].forEach(gk => {
+                const container = document.getElementById(gk === 'A' ? 'scheduleA' : 'scheduleB');
+                if (!container) return;
+                container.querySelectorAll('table tbody tr').forEach(row => {
+                    const inputs = row.querySelectorAll('input[type="number"]');
+                    if (inputs.length < 2) return;
+                    const a = inputs[0], b = inputs[1];
+                    const keyLR = `${a.dataset.team}|${b.dataset.team}`;
+                    const keyRL = `${b.dataset.team}|${a.dataset.team}`;
+                    const r = allResults[keyLR] || allResults[keyRL];
+                    if (!r) return;
+                    if (r.team1 === a.dataset.team && r.team2 === b.dataset.team) {
+                        if (r.score1 != null) a.value = r.score1;
+                        if (r.score2 != null) b.value = r.score2;
+                    } else {
+                        // inverted stored
+                        if (r.score1 != null) b.value = r.score1;
+                        if (r.score2 != null) a.value = r.score2;
+                    }
+                });
+            });
+
+            recalcStandings();
+
+            // Eingabefelder und Button ausblenden
+            document.getElementById('inputA').style.display = 'none';
+            document.getElementById('inputB').style.display = 'none';
+            document.getElementById('createBtn').style.display = 'none';
+        }
+    } catch (err) {
+        console.warn('loadState failed', err);
+    }
+}
+
+// --- UI / Gruppen ---
 document.getElementById('inputA').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
         e.preventDefault();
@@ -27,7 +105,6 @@ function addToGroup(groupKey) {
         alert('Bitte einen Mannschaftsnamen eingeben!');
         return;
     }
-    // Optional: Duplikate verhindern (innerhalb beider Gruppen)
     const exists = [...groups.A, ...groups.B].some(t => t.name.toLowerCase() === name.toLowerCase());
     if (exists) {
         alert('Diese Mannschaft existiert bereits.');
@@ -37,20 +114,20 @@ function addToGroup(groupKey) {
 
     groups[groupKey].push({ name, points: 0, diff: 0 });
     input.value = '';
-    updateTable(groupKey);
+    updateTable('A');
+    updateTable('B');
+    saveState();
 }
 
 function updateTable(groupKey) {
     const table = document.getElementById(`group${groupKey}`);
 
-    // Entferne vorhandenes thead (damit Header beim Wechsel von unfinalized -> finalized aktualisiert wird)
+    // Kopf immer neu erstellen (so aktualisiert sich Header wenn finalized wechselt)
     const oldThead = table.querySelector('thead');
     if (oldThead) oldThead.remove();
 
-    // Kopf erstellen abhängig von finalized
     const thead = document.createElement('thead');
     const trHead = document.createElement('tr');
-
     if (finalized) {
         ['Platz', 'Name', 'Punkte', 'Punkt-Diff'].forEach(txt => {
             const th = document.createElement('th');
@@ -68,7 +145,6 @@ function updateTable(groupKey) {
     const tbody = table.querySelector('tbody');
     tbody.innerHTML = '';
 
-    // Sortieren: Punkte/Diff nur relevant wenn finalized
     const sorted = groups[groupKey].slice().sort((a, b) => {
         if (finalized) {
             if (b.points !== a.points) return b.points - a.points;
@@ -88,50 +164,35 @@ function updateTable(groupKey) {
         return;
     }
 
-    // finalized: Platzierung berechnen und alle Spalten anzeigen
+    // Platzberechnung (bei Gleichstand gleicher Platz)
     let prevPoints = null;
     let prevDiff = null;
     let prevRank = 0;
-
-    sorted.forEach((team, index) => {
+    sorted.forEach((team, idx) => {
         let rank;
         if (team.points === prevPoints && team.diff === prevDiff) {
             rank = prevRank;
         } else {
-            rank = index + 1;
+            rank = idx + 1;
             prevRank = rank;
             prevPoints = team.points;
             prevDiff = team.diff;
         }
 
         const tr = document.createElement('tr');
-
-        const tdRank = document.createElement('td');
-        tdRank.textContent = rank;
-        tr.appendChild(tdRank);
-
-        const tdName = document.createElement('td');
-        tdName.textContent = team.name;
-        tr.appendChild(tdName);
-
-        const tdPoints = document.createElement('td');
-        tdPoints.textContent = team.points;
-        tr.appendChild(tdPoints);
-
-        const tdDiff = document.createElement('td');
-        tdDiff.textContent = team.diff;
-        tr.appendChild(tdDiff);
-
+        const tdRank = document.createElement('td'); tdRank.textContent = rank; tr.appendChild(tdRank);
+        const tdName = document.createElement('td'); tdName.textContent = team.name; tr.appendChild(tdName);
+        const tdPoints = document.createElement('td'); tdPoints.textContent = team.points; tr.appendChild(tdPoints);
+        const tdDiff = document.createElement('td'); tdDiff.textContent = team.diff; tr.appendChild(tdDiff);
         tbody.appendChild(tr);
     });
 }
 
-// Erstellt den Spielplan für eine Gruppe (Jeder gegen Jeden)
+// --- Spielplan generierung (greedy scheduler für ausgeglichene Reihenfolge) ---
 function generateScheduleForGroup(groupKey) {
     const teams = groups[groupKey].map(t => t.name);
     const container = document.createElement('div');
     container.className = 'generated-schedule';
-
     const h3 = document.createElement('h3');
     h3.textContent = `Spielplan Gruppe ${groupKey}`;
     container.appendChild(h3);
@@ -143,173 +204,172 @@ function generateScheduleForGroup(groupKey) {
         return container;
     }
 
+    // Alle Paarungen
+    const matches = [];
+    for (let i = 0; i < teams.length; i++) {
+        for (let j = i + 1; j < teams.length; j++) {
+            matches.push({ a: teams[i], b: teams[j] });
+        }
+    }
+
+    // Greedy scheduling zur Ausbalancierung
+    const playCount = {};
+    teams.forEach(t => playCount[t] = 0);
+    const scheduled = [];
+    while (matches.length > 0) {
+        let bestIdx = 0;
+        let bestVal = Infinity;
+        let bestSum = Infinity;
+        for (let k = 0; k < matches.length; k++) {
+            const m = matches[k];
+            const val = Math.max(playCount[m.a], playCount[m.b]);
+            const sum = playCount[m.a] + playCount[m.b];
+            if (val < bestVal || (val === bestVal && sum < bestSum)) {
+                bestIdx = k; bestVal = val; bestSum = sum;
+            }
+        }
+        const next = matches.splice(bestIdx, 1)[0];
+        scheduled.push(next);
+        playCount[next.a] += 1;
+        playCount[next.b] += 1;
+    }
+
+    // Erzeuge Tabelle ohne Rundennummern
     const table = document.createElement('table');
     table.style.width = '100%';
     table.style.borderCollapse = 'collapse';
-
     const tbody = document.createElement('tbody');
 
-    let players = teams.slice();
+    scheduled.forEach(match => {
+        const tr = document.createElement('tr');
 
-    if (players.length % 2 == 1) {
-        players.push(null);
-    }
+        // Punkte Team A (Input)
+        const tdAInp = document.createElement('td');
+        const inpA = document.createElement('input');
+        inpA.type = 'number'; inpA.min = '0'; inpA.style.width = '60px';
+        inpA.dataset.team = match.a; inpA.dataset.teamOpp = match.b; inpA.dataset.group = groupKey;
+        tdAInp.appendChild(inpA); tr.appendChild(tdAInp);
 
-    const playerCount = players.length;
-    const rounds = playerCount - 1;
-    const half = playerCount / 2;
+        // Team A Name
+        const tdAName = document.createElement('td'); tdAName.textContent = match.a; tr.appendChild(tdAName);
 
-    const playerIndexes = players.map((_, i) => i).slice(1);
+        // Separator
+        const tdSep = document.createElement('td'); tdSep.textContent = '|'; tdSep.style.textAlign = 'center'; tr.appendChild(tdSep);
 
-    for (let round = 0; round < rounds; round++) {
-        const roundPairings = [];
+        // Team B Name
+        const tdBName = document.createElement('td'); tdBName.textContent = match.b; tr.appendChild(tdBName);
 
-        const newPlayerIndexes = [0].concat(playerIndexes);
+        // Punkte Team B (Input)
+        const tdBInp = document.createElement('td');
+        const inpB = document.createElement('input');
+        inpB.type = 'number'; inpB.min = '0'; inpB.style.width = '60px';
+        inpB.dataset.team = match.b; inpB.dataset.teamOpp = match.a; inpB.dataset.group = groupKey;
+        tdBInp.appendChild(inpB); tr.appendChild(tdBInp);
 
-        const firstHalf = newPlayerIndexes.slice(0, half);
-        const secondHalf = newPlayerIndexes.slice(half, playerCount).reverse();
+        // Input handler (speichern + neu berechnen)
+        [inpA, inpB].forEach(inp => inp.addEventListener('input', onResultInput));
 
-        for (let k = 0; k < firstHalf.length; k++) {
-
-            let team1 = players[firstHalf[k]];
-            let team2 = players[secondHalf[k]];
-
-            if (team1 === null || team2 === null)  continue;
-
-            const tr = document.createElement('tr');
-
-            // Punkte Team A (Input)
-            const tdAInp = document.createElement('td');
-            const inpA = document.createElement('input');
-            inpA.type = 'number';
-            inpA.min = '0';
-            inpA.style.width = '60px';
-            inpA.dataset.team = team1;
-            inpA.dataset.teamOpp = team2;
-            inpA.dataset.group = groupKey;
-            tdAInp.appendChild(inpA);
-            tr.appendChild(tdAInp);
-
-            // Team A Name
-            const tdAName = document.createElement('td');
-            tdAName.textContent = team1;
-            tr.appendChild(tdAName);
-
-            // Separator
-            const tdSep = document.createElement('td');
-            tdSep.textContent = '|';
-            tdSep.style.textAlign = 'center';
-            tr.appendChild(tdSep);
-
-            // Team B Name
-            const tdBName = document.createElement('td');
-            tdBName.textContent = team2;
-            tr.appendChild(tdBName);
-
-            // Punkte Team B (Input)
-            const tdBInp = document.createElement('td');
-            const inpB = document.createElement('input');
-            inpB.type = 'number';
-            inpB.min = '0';
-            inpB.style.width = '60px';
-            inpB.dataset.team = team2;
-            inpB.dataset.teamOpp = team1;
-            inpB.dataset.group = groupKey;
-            tdBInp.appendChild(inpB);
-            tr.appendChild(tdBInp);
-
-            // Live-Update bei Änderungen
-            [inpA, inpB].forEach(inp => inp.addEventListener('input', recalcStandings));
-
-            tbody.appendChild(tr);
+        // Falls beim Laden schon Werte existieren, fülle sie (loadState füllt später nochmal sicherheitshalber)
+        const keyLR = `${match.a}|${match.b}`;
+        const keyRL = `${match.b}|${match.a}`;
+        const stored = allResults[keyLR] || allResults[keyRL];
+        if (stored) {
+            if (stored.team1 === match.a && stored.team2 === match.b) {
+                if (stored.score1 != null) inpA.value = stored.score1;
+                if (stored.score2 != null) inpB.value = stored.score2;
+            } else {
+                if (stored.score1 != null) inpB.value = stored.score1;
+                if (stored.score2 != null) inpA.value = stored.score2;
+            }
         }
 
-        // rotating the array
-        playerIndexes.push(playerIndexes.shift());
-    }
+        tbody.appendChild(tr);
+    });
 
     table.appendChild(tbody);
     container.appendChild(table);
     return container;
 }
 
-// Berechnet Punkte und Differenzen aus den aktuellen Spielergebnissen
+// --- Ergebnis-Handling ---
+function onResultInput(e) {
+    const input = e.target;
+    const row = input.closest('tr');
+    if (!row) return;
+    const [aInp, bInp] = row.querySelectorAll('input[type="number"]');
+    if (!aInp || !bInp) return;
+
+    const team1 = aInp.dataset.team;
+    const team2 = bInp.dataset.team;
+    const group = aInp.dataset.group;
+
+    const key = `${team1}|${team2}`;
+    const score1 = aInp.value === '' ? null : Number(aInp.value);
+    const score2 = bInp.value === '' ? null : Number(bInp.value);
+
+    allResults[key] = {
+        group,
+        team1,
+        team2,
+        score1,
+        score2
+    };
+
+    saveState();
+    recalcStandings();
+}
+
 function recalcStandings() {
-    // Reset stats
-    ['A', 'B'].forEach(k => {
-        groups[k].forEach(t => {
-            t.points = 0;
-            t.diff = 0;
-        });
-    });
+    // Reset
+    ['A','B'].forEach(k => groups[k].forEach(t => { t.points = 0; t.diff = 0; }));
 
-    // Alle Matches in beiden Schedules durchgehen
-    const matchRows = document.querySelectorAll('#scheduleA table tbody tr, #scheduleB table tbody tr');
-    matchRows.forEach(row => {
-        const inputs = row.querySelectorAll('input[type="number"]');
-        if (inputs.length < 2) return;
+    // Durch alle gespeicherten Ergebnisse
+    Object.values(allResults).forEach(r => {
+        if (!r) return;
+        const { group, team1, team2, score1, score2 } = r;
+        if (score1 == null || score2 == null) return;
+        const teamList = groups[group];
+        if (!teamList) return;
+        const t1 = teamList.find(x => x.name === team1);
+        const t2 = teamList.find(x => x.name === team2);
+        if (!t1 || !t2) return;
 
-        const aInp = inputs[0];
-        const bInp = inputs[1];
+        if (score1 > score2) t1.points += 2;
+        else if (score1 < score2) t2.points += 2;
+        else { t1.points += 1; t2.points += 1; }
 
-        if (aInp.value === '' || bInp.value === '') return;
-
-        const aScore = Number(aInp.value);
-        const bScore = Number(bInp.value);
-        const groupKey = aInp.dataset.group; // 'A' oder 'B'
-        const teamAname = aInp.dataset.team;
-        const teamBname = bInp.dataset.team;
-
-        const teamList = groups[groupKey];
-        const teamA = teamList.find(t => t.name === teamAname);
-        const teamB = teamList.find(t => t.name === teamBname);
-        if (!teamA || !teamB) return;
-
-        if (aScore > bScore) {
-            teamA.points += 2;
-        } else if (aScore < bScore) {
-            teamB.points += 2;
-        } else {
-            teamA.points += 1;
-            teamB.points += 1;
-        }
-
-        teamA.diff += (aScore - bScore);
-        teamB.diff += (bScore - aScore);
+        t1.diff += (score1 - score2);
+        t2.diff += (score2 - score1);
     });
 
     updateTable('A');
     updateTable('B');
 }
 
+// --- Spiel starten / UI ---
 document.getElementById('createBtn').addEventListener('click', () => {
-    // setze finalized auf true bevor neu rendern
     finalized = true;
 
-    // Entferne alte Spielpläne
     document.getElementById('scheduleA').innerHTML = '';
     document.getElementById('scheduleB').innerHTML = '';
 
-    // Erzeuge neue Spielpläne aus Gruppen-Daten
-    const schedA = generateScheduleForGroup('A');
-    const schedB = generateScheduleForGroup('B');
+    document.getElementById('scheduleA').appendChild(generateScheduleForGroup('A'));
+    document.getElementById('scheduleB').appendChild(generateScheduleForGroup('B'));
 
-    document.getElementById('scheduleA').appendChild(schedA);
-    document.getElementById('scheduleB').appendChild(schedB);
-
-    // Eingabefelder und Button ausblenden (Mannschaften sind final)
+    // hide inputs and button
     document.getElementById('inputA').style.display = 'none';
     document.getElementById('inputB').style.display = 'none';
     document.getElementById('createBtn').style.display = 'none';
 
-    // Tabellen neu rendern und initial auswerten
-    updateTable('A');
-    updateTable('B');
     recalcStandings();
+    saveState();
 });
 
-// Falls die Seite beim Laden bereits Teams enthalten sollte, rendern:
+// --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
-    updateTable('A');
-    updateTable('B');
+    loadState();
+    if (!localStorage.getItem(STORAGE_KEY)) {
+        updateTable('A');
+        updateTable('B');
+    }
 });
