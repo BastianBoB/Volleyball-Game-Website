@@ -72,3 +72,27 @@ button#createBtn {
     border: 1px solid #888;
     background: #f0f0f0;
 }
+
+#resetBtn {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    background: #e53935; /* rot */
+    color: #fff;
+    border: none;
+    padding: 10px 14px;
+    border-radius: 6px;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.18);
+    cursor: pointer;
+    z-index: 1000;
+}
+#resetBtn:hover {
+    background: #d32f2f;
+}
+@media (max-width: 480px) {
+    #resetBtn {
+        right: 8px;
+        bottom: 8px;
+        padding: 8px 10px;
+    }
+}

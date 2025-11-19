@@ -50,7 +50,7 @@ function loadState() {
             document.getElementById('scheduleB').appendChild(generateScheduleForGroup('B'));
 
             // Fülle Inputs aus allResults (prüft beide Orientierungen)
-            ['A','B'].forEach(gk => {
+            ['A', 'B'].forEach(gk => {
                 const container = document.getElementById(gk === 'A' ? 'scheduleA' : 'scheduleB');
                 if (!container) return;
                 container.querySelectorAll('table tbody tr').forEach(row => {
@@ -83,6 +83,47 @@ function loadState() {
         console.warn('loadState failed', err);
     }
 }
+
+// Reset: löscht gespeicherten Zustand und setzt UI/Variablen zurück
+document.getElementById('resetBtn').addEventListener('click', () => {
+    if (!confirm('Alle Daten löschen und neu starten?')) return;
+
+    // entferne gespeicherten State
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
+
+    // reset interne Daten
+    finalized = false;
+    groups.A = [];
+    groups.B = [];
+    allResults = {};
+    // zeige Eingaben/Buttons wieder
+    const inputA = document.getElementById('inputA');
+    const inputB = document.getElementById('inputB');
+    const createBtn = document.getElementById('createBtn');
+    if (inputA) inputA.style.display = '';
+    if (inputB) inputB.style.display = '';
+    if (createBtn) createBtn.style.display = '';
+
+    // leere Tabellen und Spielpläne
+    const clearTable = id => {
+        const table = document.getElementById(id);
+        if (!table) return;
+        const tbody = table.querySelector('tbody');
+        if (tbody) tbody.innerHTML = '';
+        const thead = table.querySelector('thead');
+        if (thead) thead.remove();
+    };
+    clearTable('groupA');
+    clearTable('groupB');
+    const scheduleA = document.getElementById('scheduleA');
+    const scheduleB = document.getElementById('scheduleB');
+    if (scheduleA) scheduleA.innerHTML = '';
+    if (scheduleB) scheduleB.innerHTML = '';
+
+    // neu rendern
+    updateTable('A');
+    updateTable('B');
+});
 
 // --- UI / Gruppen ---
 document.getElementById('inputA').addEventListener('keydown', (e) => {
@@ -321,7 +362,7 @@ function onResultInput(e) {
 
 function recalcStandings() {
     // Reset
-    ['A','B'].forEach(k => groups[k].forEach(t => { t.points = 0; t.diff = 0; }));
+    ['A', 'B'].forEach(k => groups[k].forEach(t => { t.points = 0; t.diff = 0; }));
 
     // Durch alle gespeicherten Ergebnisse
     Object.values(allResults).forEach(r => {
