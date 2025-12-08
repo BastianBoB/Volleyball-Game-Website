@@ -11,6 +11,23 @@
 <body>
     <h1>Volleyball-Turnier</h1>
 
+    <!-- Zeit-Einstellungen -->
+    <div style="margin-bottom: 20px; padding: 12px; background: #f9f9f9; border-radius: 6px;">
+        <h3 style="margin-top: 0;">Zeit-Einstellungen</h3>
+        <label>
+            Startzeit (HH:MM):
+            <input type="time" id="startTime" value="09:00" style="width: 120px;">
+        </label>
+        <label style="margin-left: 16px;">
+            Spieldauer (Min):
+            <input type="number" id="gameDuration" value="15" min="1" style="width: 80px;">
+        </label>
+        <label style="margin-left: 16px;">
+            Pause (Min):
+            <input type="number" id="pauseDuration" value="5" min="0" style="width: 80px;">
+        </label>
+    </div>
+
     <div class="grid">
         <div class="group-card" id="colA">
             <input type="text" id="inputA" placeholder="Mannschafts-Name" style="width: 100%;">

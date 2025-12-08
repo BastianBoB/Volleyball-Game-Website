@@ -13,6 +13,95 @@ const groups = {
 // Alle Ergebnisse: key = "TeamLeft|TeamRight" (so wie in der Tabelle), value = { group: 'A'|'B', team1, team2, score1, score2 }
 let allResults = {};
 
+// Zeit-Tracking
+let startTime = '09:00';
+let gameDuration = 15; // Minuten
+let pauseDuration = 5; // Minuten
+let matchTimes = { A: {}, B: {} }; // key: "Team1|Team2" -> { startMin, endMin, displayTime }
+
+// Zeit-Handler (speichern + neu berechnen wenn geändert)
+['startTime', 'gameDuration', 'pauseDuration'].forEach(id => {
+    const elem = document.getElementById(id);
+    if (!elem) return;
+    elem.addEventListener('change', () => {
+        startTime = document.getElementById('startTime').value;
+        gameDuration = Number(document.getElementById('gameDuration').value);
+        pauseDuration = Number(document.getElementById('pauseDuration').value);
+
+        // Wenn Spielpläne schon erstellt wurden, neu generieren
+        if (finalized) {
+            document.getElementById('scheduleA').innerHTML = '';
+            document.getElementById('scheduleB').innerHTML = '';
+            document.getElementById('scheduleA').appendChild(generateScheduleForGroup('A'));
+            document.getElementById('scheduleB').appendChild(generateScheduleForGroup('B'));
+
+            // Gespeicherte Werte wieder einfüllen
+            ['A', 'B'].forEach(gk => {
+                const container = document.getElementById(gk === 'A' ? 'scheduleA' : 'scheduleB');
+                if (!container) return;
+                container.querySelectorAll('table tbody tr').forEach(row => {
+                    const inputs = row.querySelectorAll('input[type="number"]');
+                    if (inputs.length < 2) return;
+                    const a = inputs[0], b = inputs[1];
+                    const keyLR = `${a.dataset.team}|${b.dataset.team}`;
+                    const keyRL = `${b.dataset.team}|${a.dataset.team}`;
+                    const r = allResults[keyLR] || allResults[keyRL];
+                    if (!r) return;
+                    if (r.team1 === a.dataset.team && r.team2 === b.dataset.team) {
+                        if (r.score1 != null) a.value = r.score1;
+                        if (r.score2 != null) b.value = r.score2;
+                    } else {
+                        if (r.score1 != null) b.value = r.score1;
+                        if (r.score2 != null) a.value = r.score2;
+                    }
+                });
+            });
+        }
+
+        saveState();
+    });
+});
+
+// Berechne Start-/End-Zeit für jedes Spiel
+function calcMatchTimes() {
+    matchTimes = { A: {}, B: {} };
+
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    let currentMin = startHour * 60 + startMin; // absolute Minuten seit Mitternacht
+
+    // Für jede Gruppe durchgehen (nach Reihenfolge der Spielpläne)
+    ['A', 'B'].forEach(gk => {
+        const container = document.getElementById(gk === 'A' ? 'scheduleA' : 'scheduleB');
+        if (!container) return;
+        const rows = container.querySelectorAll('table tbody tr');
+        rows.forEach(row => {
+            const inputs = row.querySelectorAll('input[type="number"]');
+            if (inputs.length < 2) return;
+            const team1 = inputs[0].dataset.team;
+            const team2 = inputs[1].dataset.team;
+            const key = `${team1}|${team2}`;
+
+            const startMinAbs = currentMin;
+            const endMinAbs = currentMin + gameDuration;
+
+            matchTimes[gk][key] = {
+                startMin: startMinAbs,
+                endMin: endMinAbs,
+                displayTime: formatTime(startMinAbs) + ' - ' + formatTime(endMinAbs)
+            };
+
+            currentMin = endMinAbs + pauseDuration;
+        });
+    });
+}
+
+// Formatiere absolute Minuten zu HH:MM
+function formatTime(absMin) {
+    const h = Math.floor(absMin / 60);
+    const m = absMin % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 // --- Helpers ---
 function saveState() {
     try {
@@ -73,6 +162,7 @@ function loadState() {
             });
 
             recalcStandings();
+            calcMatchTimes();
 
             // Eingabefelder und Button ausblenden
             document.getElementById('inputA').style.display = 'none';
@@ -275,6 +365,23 @@ function generateScheduleForGroup(groupKey) {
         playCount[next.b] += 1;
     }
 
+    // Berechne Zeiten (falls noch nicht vorhanden)
+    if (!matchTimes[groupKey]) matchTimes[groupKey] = {};
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    let currentMin = startHour * 60 + startMin;
+
+    scheduled.forEach(match => {
+        const key = `${match.a}|${match.b}`;
+        const startMinAbs = currentMin;
+        const endMinAbs = currentMin + gameDuration;
+        matchTimes[groupKey][key] = {
+            startMin: startMinAbs,
+            endMin: endMinAbs,
+            displayTime: formatTime(startMinAbs) + ' - ' + formatTime(endMinAbs)
+        };
+        currentMin = endMinAbs + pauseDuration;
+    });
+
     // Erzeuge Tabelle ohne Rundennummern
     const table = document.createElement('table');
     table.style.width = '100%';
@@ -282,7 +389,17 @@ function generateScheduleForGroup(groupKey) {
     const tbody = document.createElement('tbody');
 
     scheduled.forEach(match => {
+        const key = `${match.a}|${match.b}`;
+        const timeInfo = matchTimes[groupKey][key];
         const tr = document.createElement('tr');
+
+        // Zeit-Spalte
+        const tdTime = document.createElement('td');
+        tdTime.textContent = timeInfo ? timeInfo.displayTime : '–';
+        tdTime.style.padding = '4px 8px';
+        tdTime.style.whiteSpace = 'nowrap';
+        tr.appendChild(tdTime);
+
 
         // Punkte Team A (Input)
         const tdAInp = document.createElement('td');
@@ -396,6 +513,8 @@ document.getElementById('createBtn').addEventListener('click', () => {
 
     document.getElementById('scheduleA').appendChild(generateScheduleForGroup('A'));
     document.getElementById('scheduleB').appendChild(generateScheduleForGroup('B'));
+
+    calcMatchTimes();
 
     // hide inputs and button
     document.getElementById('inputA').style.display = 'none';
