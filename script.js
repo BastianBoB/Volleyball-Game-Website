@@ -111,7 +111,12 @@ function saveState() {
                 A: groups.A.map(t => t.name),
                 B: groups.B.map(t => t.name)
             },
-            allResults
+            allResults,
+            timeSettings: {
+                startTime,
+                gameDuration,
+                pauseDuration
+            }
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (err) {
@@ -130,6 +135,18 @@ function loadState() {
         allResults = state.allResults || {};
         updateTable('A');
         updateTable('B');
+
+        // Zeit-Einstellungen laden
+        if (state.timeSettings) {
+            startTime = state.timeSettings.startTime || '09:00';
+            gameDuration = state.timeSettings.gameDuration || 15;
+            pauseDuration = state.timeSettings.pauseDuration || 5;
+            
+            // Eingabefelder aktualisieren
+            document.getElementById('startTime').value = startTime;
+            document.getElementById('gameDuration').value = gameDuration;
+            document.getElementById('pauseDuration').value = pauseDuration;
+        }
 
         if (finalized) {
             // Erzeuge Spielpläne und fülle gespeicherte Werte ein
