@@ -87,9 +87,34 @@ button#createBtn {
     cursor: pointer;
     z-index: 1000;
 }
+
 #resetBtn:hover {
     background: #d32f2f;
 }
+
+/* ...existing code... */
+
+button#shareBtn {
+    position: fixed;
+    right: 16px;
+    bottom: 70px; /* über dem Reset Button */
+    background: #4CAF50;
+    color: #fff;
+    border: none;
+    padding: 10px 14px;
+    border-radius: 6px;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.18);
+    cursor: pointer;
+    z-index: 1000;
+    font-weight: bold;
+}
+
+button#shareBtn:hover {
+    background: #45a049;
+}
+
+/* ...existing code... */
+
 @media (max-width: 480px) {
     #resetBtn {
         right: 8px;

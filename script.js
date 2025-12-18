@@ -102,6 +102,71 @@ function formatTime(absMin) {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+function encodeState(state) {
+    try {
+        const json = JSON.stringify(state);
+        // Base64 encode für URL-Sicherheit
+        return btoa(unescape(encodeURIComponent(json)));
+    } catch (e) {
+        console.warn('encodeState failed', e);
+        return null;
+    }
+}
+
+
+function decodeState(encoded) {
+    try {
+        const json = decodeURIComponent(escape(atob(encoded)));
+        return JSON.parse(json);
+    } catch (e) {
+        console.warn('decodeState failed', e);
+        return null;
+    }
+}
+
+function getStateFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const encoded = params.get('state');
+    if (!encoded) return null;
+    return decodeState(encoded);
+}
+
+function updateURL() {
+    const state = {
+        finalized,
+        groups: {
+            A: groups.A.map(t => t.name),
+            B: groups.B.map(t => t.name)
+        },
+        allResults,
+        timeSettings: {
+            startTime,
+            gameDuration,
+            pauseDuration
+        }
+    };
+    const encoded = encodeState(state);
+    if (!encoded) return;
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('state', encoded);
+    // URL ohne Reload aktualisieren
+    window.history.replaceState({}, '', url.toString());
+}
+
+
+function copyShareLink() {
+    const url = window.location.href;
+    navigator.clipboard.writeText(url).then(() => {
+        alert('Link kopiert! Du kannst ihn jetzt teilen.');
+    }).catch(err => {
+        // Fallback: zeige URL in prompt
+        prompt('Kopiere diesen Link:', url);
+    });
+}
+
+
+
 // --- Helpers ---
 function saveState() {
     try {
@@ -119,13 +184,16 @@ function saveState() {
             }
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        updateURL();
     } catch (err) {
         console.warn('saveState failed', err);
     }
 }
 
 function loadState() {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const urlState = getStateFromURL();
+    const raw = urlState ? JSON.stringify(urlState) : localStorage.getItem(STORAGE_KEY);
+
     if (!raw) return;
     try {
         const state = JSON.parse(raw);
@@ -141,12 +209,15 @@ function loadState() {
             startTime = state.timeSettings.startTime || '09:00';
             gameDuration = state.timeSettings.gameDuration || 15;
             pauseDuration = state.timeSettings.pauseDuration || 5;
-            
+
             // Eingabefelder aktualisieren
             document.getElementById('startTime').value = startTime;
             document.getElementById('gameDuration').value = gameDuration;
             document.getElementById('pauseDuration').value = pauseDuration;
         }
+
+        updateTable('A');
+        updateTable('B');
 
         if (finalized) {
             // Erzeuge Spielpläne und fülle gespeicherte Werte ein
@@ -186,10 +257,17 @@ function loadState() {
             document.getElementById('inputB').style.display = 'none';
             document.getElementById('createBtn').style.display = 'none';
         }
+
+        if (urlState) {
+            localStorage.setItem(STORAGE_KEY, raw);
+        }
     } catch (err) {
         console.warn('loadState failed', err);
     }
 }
+
+// --- Teilen / Link kopieren ---
+document.getElementById('shareBtn').addEventListener('click', copyShareLink);
 
 // Reset: löscht gespeicherten Zustand und setzt UI/Variablen zurück
 document.getElementById('resetBtn').addEventListener('click', () => {
