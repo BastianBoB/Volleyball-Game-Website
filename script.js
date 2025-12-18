@@ -156,6 +156,7 @@ function updateURL() {
 
 
 function copyShareLink() {
+    updateURL();
     const url = window.location.href;
     navigator.clipboard.writeText(url).then(() => {
         alert('Link kopiert! Du kannst ihn jetzt teilen.');
