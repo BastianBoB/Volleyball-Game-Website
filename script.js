@@ -156,16 +156,40 @@ function updateURL() {
 
 
 function copyShareLink() {
-    updateURL();
-    const url = window.location.href;
-    navigator.clipboard.writeText(url).then(() => {
+    // State direkt kodieren und URL bauen (nicht auf window.location.href verlassen)
+    const state = {
+        finalized,
+        groups: {
+            A: groups.A.map(t => t.name),
+            B: groups.B.map(t => t.name)
+        },
+        allResults,
+        timeSettings: {
+            startTime,
+            gameDuration,
+            pauseDuration
+        }
+    };
+    const encoded = encodeState(state);
+    if (!encoded) {
+        alert('Fehler beim Erstellen des Links');
+        return;
+    }
+    
+    // URL manuell bauen (Base-URL + State-Parameter)
+    const baseUrl = window.location.origin + window.location.pathname;
+    const shareUrl = `${baseUrl}?state=${encoded}`;
+    
+    navigator.clipboard.writeText(shareUrl).then(() => {
         alert('Link kopiert! Du kannst ihn jetzt teilen.');
     }).catch(err => {
         // Fallback: zeige URL in prompt
-        prompt('Kopiere diesen Link:', url);
+        prompt('Kopiere diesen Link:', shareUrl);
     });
+    
+    // URL auch im Browser aktualisieren
+    window.history.replaceState({}, '', shareUrl);
 }
-
 
 
 // --- Helpers ---
